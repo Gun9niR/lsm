@@ -1,11 +1,16 @@
 #pragma once
 
-#include "consts.h"
+#include "src/consts.h"
 #include "src/SkipList.h"
+#include "src/Exception.h"
 
 class KVStore : public KVStoreAPI {
 private:
+    const String dir;
+
     SkipList<Key, String> memTable;
+
+    TimeStamp timeStamp;
 
 public:
 	KVStore(const String &dir);

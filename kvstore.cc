@@ -1,7 +1,7 @@
 #include "kvstore.h"
 
-KVStore::KVStore(const String &dir): KVStoreAPI(dir) {
-
+KVStore::KVStore(const String &dir): KVStoreAPI(dir), dir(dir), timeStamp(0) {
+    // todo: load all SSTables from given directory
 }
 
 KVStore::~KVStore() {
@@ -13,7 +13,12 @@ KVStore::~KVStore() {
  * No return values for simplicity.
  */
 void KVStore::put(Key key, const String &s) {
-    memTable.put(key, s);
+    try {
+        memTable.put(key, s);
+    } catch (const MemTableFull &) {
+        memTable.toFile(timeStamp, dir);
+    }
+
 }
 /**
  * Returns the (string) value of the given key.
@@ -31,7 +36,11 @@ String KVStore::get(Key key) {
  * Returns false iff the key is not found.
  */
 bool KVStore::del(Key key) {
-	return memTable.del(key);
+    // todo: 现在只返回在memTable中的查找结果, memTable中找不到就会返回false
+    bool isSuccess = memTable.del(key);
+    // todo: put可能会超过文件大小限制
+    put(key, DELETION_MARK);
+	return isSuccess;
 }
 
 /**

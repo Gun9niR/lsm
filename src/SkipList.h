@@ -4,6 +4,8 @@
 #include <memory>
 #include <stack>
 #include <iostream>
+#include "BloomFilter.h"
+#include "Exception.h"
 
 using std::stack;
 using std::shared_ptr;
@@ -28,11 +30,17 @@ private:
 
     typedef shared_ptr<Node> NodePtr;
 
+    BloomFilter<Key> bloomFilter;
+
     NodePtr head;
 
-    size_t _size;
+    Size _size;
 
-    size_t _fileSize;
+    Size _fileSize;
+
+    Key getMinKey();
+
+    Key getMaxKey();
 
 private:
     bool shouldInsertUp();
@@ -48,9 +56,9 @@ private:
 public:
     SkipList();
 
-    size_t size();
+    Size size();
 
-    size_t fileSize();
+    Size fileSize();
 
     Value *get(const Key &);
 
@@ -59,22 +67,24 @@ public:
     bool del(const Key &);
 
     void reset();
+
+    void toFile(TimeStamp, const String &);
 };
 
 template<typename Key, typename Value>
 SkipList<Key, Value>::SkipList() {
     _size = 0;
-    _fileSize = 32 + 10240; // header and bloom filter
+    _fileSize = HEADER_SIZE + BLOOM_FILTER_SIZE; // header and bloom filter
     head = make_shared<Node>();
 }
 
 template<typename Key, typename Value>
-size_t SkipList<Key, Value>::size() {
+Size SkipList<Key, Value>::size() {
     return _size;
 }
 
 template<typename Key, typename Value>
-size_t SkipList<Key, Value>::fileSize() {
+Size SkipList<Key, Value>::fileSize() {
     return _fileSize;
 }
 
@@ -82,7 +92,7 @@ size_t SkipList<Key, Value>::fileSize() {
 template<typename Key, typename Value>
 Value* SkipList<Key, Value>::get(const Key& key) {
     NodePtr node = getNode(key);
-    if (node != nullptr) {
+    if (node && node->value != DELETION_MARK) {
         return &node->value;
     }
     return nullptr;
@@ -90,6 +100,10 @@ Value* SkipList<Key, Value>::get(const Key& key) {
 
 template<typename Key, typename Value>
 void SkipList<Key, Value>::put(const Key& key, const Value& value) {
+    if (value != DELETION_MARK) {
+        bloomFilter.put(key);
+    }
+
     stack<NodePtr> pathStack;
     NodePtr p = head;
     while(p) {
@@ -103,9 +117,12 @@ void SkipList<Key, Value>::put(const Key& key, const Value& value) {
     // 替换，_size不变，_fileSize改变
     NodePtr nodeToInsert = pathStack.empty() ? nullptr : pathStack.top()->right;
     if (nodeToInsert && nodeToInsert->key == key) {
+
+        // 修改文件大小， 不用修改filter
         int fileSizeDifference = computeFileSizeChange(nodeToInsert->value, value);
-        // todo: 检查是否需要Compaction，需要的话就先compaction
-        // 修改文件大小
+        if (_fileSize + fileSizeDifference > MAX_SSTABLE_SIZE) {
+            throw MemTableFull();
+        }
         _fileSize += fileSizeDifference;
 
         computeFileSizeChange(nodeToInsert->value, value);
@@ -120,18 +137,22 @@ void SkipList<Key, Value>::put(const Key& key, const Value& value) {
         return;
     }
 
-    int fileSizeDifference = computeFileSizeChange(value);
+    // 插入，_size和_fileSize都改变
     // todo: 检查是否需要Compaction，需要的话就先compaction
+    int fileSizeDifference = computeFileSizeChange(value);
     ++_size;
     _fileSize += fileSizeDifference;
     // 插入且当前层依然存在，_size和_fileSize都增加
     bool insertUp = true;
     NodePtr downNode = nullptr;
-    while(insertUp && pathStack.size() > 0) {
+    while(insertUp && !pathStack.empty()) {
         NodePtr insert = pathStack.top();
         pathStack.pop();
         insert->right = make_shared<Node>(key, value, insert, insert->right, downNode); //add新结点
         downNode = insert->right;
+        if (downNode->right) {
+            downNode->right->left = downNode;
+        }
         insertUp = shouldInsertUp();
     }
 
@@ -151,15 +172,20 @@ template<typename Key, typename Value>
 bool SkipList<Key, Value>::del(const Key& key) {
     // 找要被删的最上层结点
     NodePtr topNode = getNode(key);
+
     // 没有找到
-    if (topNode == nullptr) {
+    if (topNode == nullptr || topNode->value == DELETION_MARK) {
         return false;
     }
 
+    int decrementedFileSize = computeFileSizeChange(topNode->value);
+    _fileSize -= decrementedFileSize;
+    --_size;
+
     // 开始向下删除
-    // todo: 插入deletion mark，并修改fileSize
+    NodePtr oldNode;
     while (topNode) {
-        NodePtr oldNode = topNode;
+        oldNode = topNode;
         topNode->left->right = topNode->right;
         if (topNode->right) {
             topNode->right->left = topNode->left;
@@ -167,7 +193,13 @@ bool SkipList<Key, Value>::del(const Key& key) {
         topNode = topNode->down;
         oldNode.reset();
     }
-    --_size;
+
+    // 删除多余的层
+    while (head->down && !head->right) {
+        NodePtr oldHead = head;
+        head = head->down;
+        oldHead.reset();
+    }
 
     return true;
 }
@@ -223,6 +255,47 @@ shared_ptr<typename SkipList<Key, Value>::Node> SkipList<Key, Value>::getNode(co
     }
 
     return nullptr;
+}
+
+template<typename Key, typename Value>
+void SkipList<Key, Value>::toFile(TimeStamp timeStamp, const String &dir) {
+    // todo: write content of memTable into a SSTable
+
+}
+
+template<typename Key, typename Value>
+Key SkipList<Key, Value>::getMinKey() {
+    NodePtr nodePtr = head;
+
+    while (nodePtr->down) {
+        nodePtr = nodePtr->down;
+    }
+
+    nodePtr = nodePtr->right;
+
+    while (nodePtr && nodePtr->value == DELETION_MARK) {
+        nodePtr = nodePtr->right;
+    }
+
+    return nodePtr ? nodePtr->key : std::numeric_limits<Key>::quiet_NaN();
+}
+
+template<typename Key, typename Value>
+Key SkipList<Key, Value>::getMaxKey() {
+    NodePtr nodePtr = head;
+
+    while (nodePtr->down) {
+        while (nodePtr->right) {
+            nodePtr = nodePtr->right;
+        }
+        nodePtr = nodePtr->down;
+    }
+
+    while (nodePtr && nodePtr->value == DELETION_MARK) {
+        nodePtr = nodePtr->left;
+    }
+
+    return nodePtr ? nodePtr->key : std::numeric_limits<Key>::quiet_NaN();
 }
 
 #endif //LSM_SKIPLIST_H
