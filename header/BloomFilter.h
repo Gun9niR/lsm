@@ -32,21 +32,21 @@ template<typename Key>
 void BloomFilter<Key>::put(const Key& key) {
     unsigned int hash[4] = {0};
     MurmurHash3_x64_128(&key, 8, 1, hash);
-    for (auto i : hash) {
-        filter[i % BLOOM_FILTER_SIZE] = true;
-    }
+
+    filter[hash[0] % BLOOM_FILTER_SIZE] =
+        filter[hash[1] % BLOOM_FILTER_SIZE] =
+            filter[hash[2] % BLOOM_FILTER_SIZE] =
+                filter[hash[3] % BLOOM_FILTER_SIZE] = true;
 }
 
 template<typename Key>
 bool BloomFilter<Key>::isProbablyPresent(const Key& key) const {
     unsigned int hash[4] = {0};
     MurmurHash3_x64_128(&key, 8, 1, hash);
-    for (auto i: hash) {
-        if (!filter[i % BLOOM_FILTER_SIZE]) {
-            return false;
-        }
-    }
-    return true;
+    return filter[hash[0] % BLOOM_FILTER_SIZE] &&
+            filter[hash[1] % BLOOM_FILTER_SIZE] &&
+            filter[hash[2] % BLOOM_FILTER_SIZE] &&
+            filter[hash[3] % BLOOM_FILTER_SIZE];
 }
 
 template<typename Key>
