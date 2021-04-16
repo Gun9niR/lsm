@@ -1,8 +1,9 @@
 #pragma once
 
-#include "src/consts.h"
-#include "src/SkipList.h"
-#include "src/Exception.h"
+#include "header/SSTable.h"
+#include "header/SkipList.h"
+#include "header/Exception.h"
+
 
 class KVStore : public KVStoreAPI {
 private:
@@ -12,8 +13,12 @@ private:
 
     TimeStamp timeStamp;
 
+    vector<LevelPtr> ssTables;
+
+    static SSTablePtr binarySearch(const LevelPtr&, const Key&);
+
 public:
-	KVStore(const String &dir);
+	explicit KVStore(const String &dir);
 
 	~KVStore();
 
