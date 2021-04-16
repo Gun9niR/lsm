@@ -178,3 +178,14 @@ SSTablePtr KVStore::binarySearch(const LevelPtr& levelPtr,const Key& key) {
     }
     return nullptr;
 }
+
+void KVStore::printSSTables() {
+    int numOfLevels = ssTables.size();
+    for (int i = 0; i < numOfLevels; ++i) {
+        cout << "Level " << i << endl;
+        Level level = *ssTables[i]; //
+        for (SSTablePtr ssTablePtr: level) {
+            cout << *ssTablePtr << endl;
+        }
+    }
+}

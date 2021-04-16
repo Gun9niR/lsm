@@ -92,7 +92,9 @@ private:
 	void test(uint64_t max)
 	{
 		uint64_t i;
+
 		// Test data
+
 		for (i = 0; i < max; ++i) {
 			switch (i & 3) {
 			case 0:

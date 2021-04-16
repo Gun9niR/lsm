@@ -17,11 +17,12 @@ SSTable::SSTable(const String & fileFullPath) {
 
     bloomFilter.fromFile(ssTableInFile);
 
-    for (int i = 0; i < numOfKeys; ++i) {
+    for (Size i = 0; i < numOfKeys; ++i) {
         ssTableInFile.read((char *)&keys[i], 8)
                      .read((char *)&offset[i], 4);
     }
 
+    ssTableInFile.seekg (0, ssTableInFile.end);
     fileSize = ssTableInFile.tellg();
 
     ssTableInFile.close();
@@ -54,14 +55,18 @@ shared_ptr<String> SSTable::get(const Key& key) const {
 
         if (idx != std::numeric_limits<size_t>::max()) {
             // 从文件中读取value
+
             size_t length = (idx != numOfKeys - 1) ?
                     offset[idx + 1] - offset[idx] :
                     fileSize - offset[idx];
 
             shared_ptr<String> ret = make_shared<String>(length, 0);
             ifstream file(fullPath, ios::binary);
+
             file.seekg(offset[idx]);
             file.read(&(*ret)[0], length);
+
+
             return ret;
         }
     }

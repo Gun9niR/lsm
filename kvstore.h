@@ -29,4 +29,6 @@ public:
 	bool del(Key key) override;
 
 	void reset() override;
+
+	void printSSTables();
 };
