@@ -22,6 +22,7 @@ public:
     // read array from a file
     void fromFile(ifstream &);
 
+    // set filter array to all false
     void reset();
 };
 

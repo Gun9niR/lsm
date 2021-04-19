@@ -184,7 +184,7 @@ bool SkipList<Key, Value>::del(const Key& key) {
     // 找要被删的最上层结点
     NodePtr topNode = getNode(key);
 
-    // 没有找到
+    // 没有找到，找到被删除的记录也算是没有找到
     if (topNode == nullptr || topNode->value == DELETION_MARK) {
         return false;
     }
@@ -273,7 +273,6 @@ typename SkipList<Key, Value>::NodePtr SkipList<Key, Value>::getNode(const Key& 
 
 template<typename Key, typename Value>
 SSTablePtr SkipList<Key, Value>::toFile(TimeStamp timeStamp, const String &dir) {
-    // todo: change ltoFileevel name
     String level0Path = dir + "/level-0";
     String filePath = level0Path + "/" + std::to_string(timeStamp) + ".sst";
 

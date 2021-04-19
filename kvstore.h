@@ -15,6 +15,24 @@ private:
 
     vector<LevelPtr> ssTables;
 
+    void compaction();
+
+    void compaction(size_t, bool);
+
+    void compactionLevel0();
+
+    vector<SSTablePtr> startMerge(size_t, priority_queue<pair<SSTablePtr, size_t>> &, unordered_map<SSTablePtr, shared_ptr<vector<StringPtr>>>&);
+
+    vector<SSTablePtr> startMerge(size_t, SSTablePtr, vector<SSTablePtr>&, unordered_map<SSTablePtr, shared_ptr<vector<StringPtr>>>&, bool);
+
+    static void save(SSTablePtr&, size_t, Size, Key, Key, vector<shared_ptr<String>>&);
+
+    void reconstructLevel(size_t, const shared_ptr<unordered_set<SSTablePtr>>&);
+
+    void reconstructLevel(size_t, unordered_set<size_t>&, vector<SSTablePtr>&);
+
+    shared_ptr<unordered_set<SSTablePtr>> getSSTForCompaction(size_t, size_t);
+
     static SSTablePtr binarySearch(const LevelPtr&, const Key&);
 
 public:

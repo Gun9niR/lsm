@@ -1,8 +1,13 @@
 #include "header/SSTable.h"
 #include <fstream>
 
+SSTable::SSTable(): minKey(std::numeric_limits<Key>::max()), maxKey(std::numeric_limits<Key>::min())
+{ }
+
+/*
+ * construct an SSTable by reading from a file
+ */
 SSTable::SSTable(const String & fileFullPath) {
-    // construct an SSTable by reading from a file
     fullPath = fileFullPath;
     ifstream ssTableInFile(fileFullPath, ios::binary);
 
@@ -55,22 +60,26 @@ shared_ptr<String> SSTable::get(const Key& key) const {
 
         if (idx != std::numeric_limits<size_t>::max()) {
             // 从文件中读取value
-
-            size_t length = (idx != numOfKeys - 1) ?
-                    offset[idx + 1] - offset[idx] :
-                    fileSize - offset[idx];
-
-            shared_ptr<String> ret = make_shared<String>(length, 0);
-            ifstream file(fullPath, ios::binary);
-
-            file.seekg(offset[idx]);
-            file.read(&(*ret)[0], length);
-
-
-            return ret;
+            return get(idx);
         }
     }
     return nullptr;
+}
+
+shared_ptr<String> SSTable::get(size_t idx) const {
+    size_t length = (idx != numOfKeys - 1) ?
+                    offset[idx + 1] - offset[idx] :
+                    fileSize - offset[idx];
+
+    shared_ptr<String> ret = make_shared<String>(length, 0);
+    ifstream file(fullPath, ios::binary);
+
+    file.seekg(offset[idx]);
+    file.read(&(*ret)[0], length);
+
+    file.close();
+
+    return ret;
 }
 
 size_t SSTable::binarySearch(const Key& key) const {
@@ -101,4 +110,51 @@ Key SSTable::getMaxKey() const {
 
 Key SSTable::getMinKey() const {
     return minKey;
+}
+
+/* when calling this function, every field is set */
+
+void SSTable::toFile(vector<shared_ptr<String>>& values) {
+    ofstream file(fullPath, ios::out | ios::binary);
+
+    file.write((char *)&timeStamp, 8)
+        .write((char *)&numOfKeys, 8)
+        .write((char *)&minKey, 8)
+        .write((char *)&maxKey, 8);
+
+    bloomFilter.toFile(file);
+
+    for (int i = 0; i < numOfKeys; ++i) {
+        file.write((char *)&keys[i], 8)
+            .write((char *)&offset[i], 4);
+    }
+
+    for (int i = 0; i < numOfKeys; ++i) {
+        file.write(values[i]->c_str(), values[i]->size());
+    }
+    file.close();
+}
+
+shared_ptr<vector<StringPtr>> SSTable::getAllValues() const {
+    shared_ptr<vector<StringPtr>> ret = make_shared<vector<StringPtr>>();
+    ret->reserve(numOfKeys);
+
+    ifstream file(fullPath, ios::binary);
+
+    file.seekg(offset[0]);
+
+    for (int i = 0; i < numOfKeys - 1; ++i) {
+        size_t length = offset[i + 1] - offset[i];
+        StringPtr value = make_shared<String>(length, 0);
+        file.read(&(*value)[0], length);
+        ret->emplace_back(value);
+    }
+
+    size_t length = fileSize - offset[numOfKeys - 1];
+    StringPtr value = make_shared<String>(length, 0);
+    file.read(&(*value)[0], length);
+    ret->emplace_back(value);
+    file.close();
+
+    return ret;
 }
