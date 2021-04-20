@@ -7,7 +7,7 @@
 #include "kvstore.h"
 
 class Test {
-protected:
+public:
 	static const std::string not_found;
 
 	uint64_t nr_tests;
@@ -15,9 +15,9 @@ protected:
 	uint64_t nr_phases;
 	uint64_t nr_passed_phases;
 
-#define EXPECT(exp, got) expect<decltype(got)>((exp), (got), __FILE__, __LINE__)
+#define EXPECT(key, exp, got) expect<decltype(got)>(key, (exp), (got), __FILE__, __LINE__)
 	template<typename T>
-	void expect(const T &exp, const T &got,
+	void expect(const uint64_t key, const T &exp, const T &got,
 		    const std::string &file, int line)
 	{
 		++nr_tests;
@@ -25,9 +25,10 @@ protected:
 			++nr_passed_tests;
 			return;
 		}
+
 		if (verbose) {
 			std::cerr << "TEST Error @" << file << ":" << line;
-			std::cerr << ", expected " << exp;
+			std::cerr << ", key: " << key;
 			std::cerr << ", got " << got << std::endl;
 		}
 	}

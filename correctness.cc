@@ -14,37 +14,41 @@ private:
 		uint64_t i;
 
 		// Test a single key
-		EXPECT(not_found, store.get(1));
+		EXPECT(1, not_found, store.get(1));
 		store.put(1, "SE");
-		EXPECT("SE", store.get(1));
-		EXPECT(true, store.del(1));
-		EXPECT(not_found, store.get(1));
-		EXPECT(false, store.del(1));
+		EXPECT(1, "SE", store.get(1));
+		EXPECT(1, true, store.del(1));
+		EXPECT(1, not_found, store.get(1));
+		EXPECT(1, false, store.del(1));
 
 		phase();
 
 		// Test multiple key-value pairs
-		for (i = 0; i < max; ++i) {
-			store.put(i, std::string(i+1, 's'));
-			EXPECT(std::string(i+1, 's'), store.get(i));
-		}
+        for (i = 0; i < max; i += 2) {
+            store.put(i, std::string(i+1, 's'));
+            EXPECT(i, std::string(i+1, 's'), store.get(i));
+        }
+        for (i = 1; i < max; i += 2) {
+            store.put(i, std::string(i+1, 's'));
+            EXPECT(i, std::string(i+1, 's'), store.get(i));
+        }
 		phase();
 
 		// Test after all insertions
 		for (i = 0; i < max; ++i)
-			EXPECT(std::string(i+1, 's'), store.get(i));
+			EXPECT(i, std::string(i+1, 's'), store.get(i));
 		phase();
 
 		// Test deletions
 		for (i = 0; i < max; i+=2)
-			EXPECT(true, store.del(i));
+			EXPECT(i, true, store.del(i));
 
 		for (i = 0; i < max; ++i)
-			EXPECT((i & 1) ? std::string(i+1, 's') : not_found,
+			EXPECT(i, (i & 1) ? std::string(i+1, 's') : not_found,
 			       store.get(i));
 
 		for (i = 1; i < max; ++i)
-			EXPECT(i & 1, store.del(i));
+			EXPECT(i, i & 1, store.del(i));
 
 		phase();
 
@@ -81,6 +85,5 @@ int main(int argc, char *argv[])
 	CorrectnessTest test("./data", verbose);
 
 	test.start_test();
-
 	return 0;
 }

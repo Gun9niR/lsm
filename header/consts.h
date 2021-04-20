@@ -10,6 +10,7 @@
 #include <queue>
 #include <unordered_set>
 #include <unordered_map>
+#include <set>
 #include "../kvstore_api.h"
 
 using std::shared_ptr;
@@ -28,6 +29,7 @@ using std::make_pair;
 using std::to_string;
 using std::unordered_set;
 using std::unordered_map;
+using std::set;
 
 typedef std::string String;
 typedef shared_ptr<String> StringPtr;

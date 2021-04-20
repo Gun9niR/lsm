@@ -4,6 +4,10 @@
 
 #include <iostream>
 
+/**
+ * @Description: Construct KVStore object with given base directory
+ * @param dir: base directory, where all SSTs are stored
+ */
 KVStore::KVStore(const String &dir): KVStoreAPI(dir), dir(dir), timeStamp(1) {
     vector<String> levelList;
     int levelNum = utils::scanDir(dir, levelList);
@@ -41,6 +45,9 @@ KVStore::KVStore(const String &dir): KVStoreAPI(dir), dir(dir), timeStamp(1) {
     }
 }
 
+/**
+ * @Description: Destruct KVStor object, write the content of memory to disk
+ */
 KVStore::~KVStore() {
     if (!memTable.isEmpty()) {
         memTable.toFile(timeStamp++, dir);
@@ -49,8 +56,9 @@ KVStore::~KVStore() {
 }
 
 /**
- * Insert/Update the key-value pair.
- * No return values for simplicity.
+ * @Description: Insert/Update the key-value pair. No return values for simplicity.
+ * @Param key: Key in the key-value pair
+ * @Param s: Value in the key-value pair
  */
 void KVStore::put(Key key, const String &s) {
     try {
@@ -65,8 +73,9 @@ void KVStore::put(Key key, const String &s) {
     }
 }
 /**
- * Returns the (string) value of the given key.
- * An empty string indicates not found.
+ * @Description: Find in KVStore by key
+ * @Param key: The key to find with
+ * @Return: the (string) value of the given key. Empty string indicates not found.
  */
 String KVStore::get(Key key) {
     String* valueInMemory = memTable.get(key);
@@ -102,9 +111,11 @@ String KVStore::get(Key key) {
     }
     return "";
 }
+
 /**
- * Delete the given key-value pair if it exists.
- * Returns false iff the key is not found.
+ * @Description: Delete the given key-value pair if it exists.
+ * @Param key: The key to search with
+ * @Return: false iff the key is not found.
  */
 bool KVStore::del(Key key) {
     // true则一定有，false可能没有
@@ -146,8 +157,8 @@ bool KVStore::del(Key key) {
 }
 
 /**
- * This resets the kvstore. All key-value pairs should be removed,
- * including memtable and all sstables files.
+ * @Description: Resets the kvstore. All key-value pairs should be removed,
+ *               including memtable and all sstables files.
  */
 void KVStore::reset() {
     memTable.reset();
@@ -172,7 +183,10 @@ void KVStore::reset() {
 }
 
 /*
- * Search in a level for a key, using binary search, returns the sstable
+ * @Description: Search in a level for a key using binary search
+ * @Param levelPtr: Pointer to the level to search in
+ * @Param key: Key to search with
+ * @Return: Pointer to the SST that is found
  */
 SSTablePtr KVStore::binarySearch(const LevelPtr& levelPtr,const Key& key) {
     long left = 0;
@@ -192,9 +206,9 @@ SSTablePtr KVStore::binarySearch(const LevelPtr& levelPtr,const Key& key) {
 }
 
 /*
- * Debug utility function, print all ssTables cached in memory.
+ * @Description: Debug utility function, print all ssTables cached in memory.
  */
-void KVStore::printSSTables() {
+__unused void KVStore::printSSTables() {
     int numOfLevels = ssTables.size();
     for (int i = 0; i < numOfLevels; ++i) {
         cout << "Level " << i << endl;
@@ -205,6 +219,9 @@ void KVStore::printSSTables() {
     }
 }
 
+/**
+ * @Description: Handle compaction for all levels, level-0 and other levels are handled separately
+ */
 void KVStore::compaction() {
     // handle level0 special case
     if (ssTables[0]->size() > 2) {
@@ -240,7 +257,6 @@ void KVStore::compaction() {
             ofstream dst(sst->fullPath, ios::binary);
             dst << src.rdbuf();
             utils::rmfile(oldPath.c_str());
-
             newLevel->emplace_back(sst);
         }
         ssTables.emplace_back(newLevel);
@@ -248,31 +264,32 @@ void KVStore::compaction() {
     }
 }
 
-// step1: find the sstables with the least time stamp
-// step2: Iterate over these sstables, find the overlapping sstables, put them in a vector
-// step3: merge that vector and this singe sstable, files are created along the way
-// step4: use reconstruct() to rebuild the next level
-// step5: after iterating through all sstables, reconstruct the top level
+/**
+ * @Description: Handle compaction for levels other than level-0
+ * @param level: The number of level that is overflowing currently
+ * @param shouldRemoveDeletionMark: A flag that decides whether "~DELETED~" should be removed
+ *                                  It is true only when level is the level above the bottom level
+ */
 void KVStore::compaction(size_t level, bool shouldRemoveDeletionMark) {
     LevelPtr curLevelPtr = ssTables[level];
-    LevelPtr nextLevelPtr = ssTables[level + 1];
 
     size_t maxSize = 2 << level;                      // max size of current level
     size_t numOfTablesToMerge = curLevelPtr->size() - maxSize;
 
     // step1: find the sstables with the least time stamp
-    shared_ptr<unordered_set<SSTablePtr>> curLevelDiscard = getSSTForCompaction(level, numOfTablesToMerge);
+    shared_ptr<set<SSTablePtr>> curLevelDiscard = getSSTForCompaction(level, numOfTablesToMerge);
 
     for (auto sstIt = curLevelDiscard->begin(); sstIt != curLevelDiscard->end(); ++sstIt) {
         // step2: Iterate over these sstables, find the overlapping sstables, put them in a vector
         SSTablePtr ssTablePtr = *sstIt;
+        LevelPtr nextLevelPtr = ssTables[level + 1];
 
         Key minKey = ssTablePtr->getMinKey();
         Key maxKey = ssTablePtr->getMaxKey();
 
         // sst in overlap is sorted in ascending order of key
         vector<SSTablePtr> overlap;
-        unordered_set<size_t> nextLevelDiscard;
+        unordered_set<SSTablePtr> nextLevelDiscard;
         unordered_map<SSTablePtr, shared_ptr<vector<StringPtr>>> allValues;
         allValues[ssTablePtr] = ssTablePtr->getAllValues();
 
@@ -282,21 +299,39 @@ void KVStore::compaction(size_t level, bool shouldRemoveDeletionMark) {
             // todo: change to upper and lower bound
             if (nextLevelSSTPtr->getMinKey() <= maxKey && nextLevelSSTPtr->getMaxKey() >= minKey) {
                 overlap.emplace_back(nextLevelSSTPtr);
-                nextLevelDiscard.insert(i);
+                nextLevelDiscard.insert(nextLevelSSTPtr);
                 allValues[nextLevelSSTPtr] = nextLevelSSTPtr->getAllValues();
             }
         }
 
         // step3: merge that vector and this singe sstable, files are created along the way
         vector<SSTablePtr> mergeResult = startMerge(level + 1, ssTablePtr, overlap, allValues, shouldRemoveDeletionMark);
-        if (mergeResult.empty()) {
-            cout << "empty result" << endl;
-            for (auto i = curLevelDiscard->begin(); i != curLevelDiscard->end(); ++i) {
-                cout << **i << endl;
-            }
+
+#ifdef DEBUG
+        cout << "================= merge result =================" << endl;
+        for (auto i: mergeResult) {
+            cout << *i << endl;
         }
+#endif
         // step4: use reconstruct() to rebuild the next level
+
+#ifdef DEBUG
+        cout << "================= before reconstruct =================" << endl;
+        LevelPtr nextLevel = ssTables[level + 1];
+        for (auto i = nextLevel->begin(); i != nextLevel->end(); ++i) {
+            cout << **i << endl;
+        }
+#endif
+
         reconstructLevel(level + 1, nextLevelDiscard, mergeResult);
+        LevelPtr newNextLevel = ssTables[level + 1];
+
+#ifdef DEBUG
+        cout << "================= after reconstruct =================" << endl;
+        for (auto i = newNextLevel->begin(); i != newNextLevel->end(); ++i) {
+            cout << **i << endl;
+        }
+#endif
     }
 
     // step5: after iterating through all sstables, reconstruct the top level
@@ -304,9 +339,12 @@ void KVStore::compaction(size_t level, bool shouldRemoveDeletionMark) {
 }
 
 /*
- * Merge sstables in priority queue
- * level: level to merge to, must exist already
- * this method is meant for compaction of level 0
+ * @Description: Merge SSTs for level-0 using priority queue
+ *               It also handles the creation of level-1, if level-0 is full
+ * @Param level: Number of level to merge TO, which must exist already
+ * @Param pq: The priority queue that contains all SSTs to be merged
+ * @Param allValues: The values that are stored in SSTs in the priority queue
+ * @Return: A vector of new SSTs as the result of the merge
  */
 vector<SSTablePtr> KVStore::startMerge(size_t level, priority_queue<pair<SSTablePtr, size_t>>& pq, unordered_map<SSTablePtr, shared_ptr<vector<StringPtr>>>& allValues) {
     vector<SSTablePtr> ret;
@@ -378,7 +416,8 @@ vector<SSTablePtr> KVStore::startMerge(size_t level, priority_queue<pair<SSTable
 }
 
 /*
- * Given value of various fields of SSTable, initialize it with these values, and write it to file
+ * @Description: Given value of various fields of SSTable, initialize it with these values, and write it to disk
+ * @Param ssTablePtr: Pointer to the SST to be initialized and saved
  */
 void KVStore::save(SSTablePtr& ssTablePtr, size_t fileSize, Size numOfKeys, Key minKey, Key maxKey, vector<shared_ptr<String>>& values) {
     ssTablePtr->fileSize = fileSize;
@@ -395,7 +434,7 @@ void KVStore::save(SSTablePtr& ssTablePtr, size_t fileSize, Size numOfKeys, Key 
     ssTablePtr->toFile(values);
 }
 
-void KVStore::reconstructLevel(size_t level, const shared_ptr<unordered_set<SSTablePtr>>& sstToDiscard) {
+void KVStore::reconstructLevel(size_t level, const shared_ptr<set<SSTablePtr>>& sstToDiscard) {
     LevelPtr levelPtr = ssTables[level];
 
     size_t currentLevelSize = levelPtr->size();
@@ -448,7 +487,7 @@ void KVStore::compactionLevel0() {
     } else {
         LevelPtr level1Ptr = ssTables[1];
         size_t level1Size = level1Ptr->size();
-        unordered_set<size_t> idxToDiscard;
+        unordered_set<SSTablePtr> nextLevelDiscard;
 
         for (int i = 0; i < level1Size; ++i) {
             SSTablePtr ssTablePtrToPush = level1Ptr->at(i);
@@ -457,12 +496,12 @@ void KVStore::compactionLevel0() {
             if (ssTablePtrToPush->getMinKey() <= maxKey && ssTablePtrToPush->getMaxKey() >= minKey) {
                 pq.push(make_pair(ssTablePtrToPush, 0));
                 values[ssTablePtrToPush] = ssTablePtrToPush->getAllValues();
-                idxToDiscard.insert(i);
+                nextLevelDiscard.insert(ssTablePtrToPush);
             }
         }
 
         vector<SSTablePtr> mergeResult = startMerge(1, pq, values);
-        reconstructLevel(1, idxToDiscard, mergeResult);
+        reconstructLevel(1, nextLevelDiscard, mergeResult);
     }
 
     ssTables[0]->clear();
@@ -471,7 +510,7 @@ void KVStore::compactionLevel0() {
 /*
  * Given the level, idx to remove and sstables to add, reconstruct that level
  */
-void KVStore::reconstructLevel(size_t level, unordered_set<size_t> &idxToDiscard, vector<SSTablePtr> &mergeResult) {
+void KVStore::reconstructLevel(size_t level, unordered_set<SSTablePtr> &sstToDiscard, vector<SSTablePtr> &mergeResult) {
     LevelPtr levelPtr = ssTables[level];
     Key minResultKey = mergeResult[0]->getMinKey();
 
@@ -479,22 +518,22 @@ void KVStore::reconstructLevel(size_t level, unordered_set<size_t> &idxToDiscard
     size_t levelSize = levelPtr->size();
     int i = 0;
     for (; i < levelSize && levelPtr->at(i)->getMaxKey() < minResultKey; ++i) {
-        if (!idxToDiscard.count(i)) {
+        if (!sstToDiscard.count(levelPtr->at(i))) {
             newLevel->emplace_back(levelPtr->at(i));
         }
     }
 
     newLevel->insert(newLevel->end(), mergeResult.begin(), mergeResult.end());
     for (; i < levelSize; ++i) {
-        if (!idxToDiscard.count(i)) {
+        if (!sstToDiscard.count(levelPtr->at(i))) {
             newLevel->emplace_back(levelPtr->at(i));
         }
     }
     ssTables[level] = newLevel;
 }
 
-shared_ptr<unordered_set<SSTablePtr>> KVStore::getSSTForCompaction(size_t level, size_t k) {
-    auto ret = make_shared<unordered_set<SSTablePtr>>();
+shared_ptr<set<SSTablePtr>> KVStore::getSSTForCompaction(size_t level, size_t k) {
+    auto ret = make_shared<set<SSTablePtr>>();
     auto comparator = [](const SSTablePtr &t1, const SSTablePtr &t2) { return t1->timeStamp < t2->timeStamp; };
 
     priority_queue<SSTablePtr, vector<SSTablePtr>, decltype(comparator)> pq(comparator);
@@ -522,6 +561,15 @@ vector<SSTablePtr> KVStore::startMerge(size_t level,
                                        vector<SSTablePtr> &overlap,
                                        unordered_map<SSTablePtr, shared_ptr<vector<StringPtr>>>& allValues,
                                        bool shouldRemoveDeletionMark) {
+
+#ifdef DEBUG
+    cout << "================= merge from =================" << endl;
+    cout << *sst << endl;
+    for (auto sstPtr = overlap.begin(); sstPtr != overlap.end(); ++sstPtr) {
+        cout << **sstPtr << endl;
+    }
+#endif
+
     vector<SSTablePtr> ret;
 
     size_t numOfOverlap = overlap.size();
@@ -568,7 +616,7 @@ vector<SSTablePtr> KVStore::startMerge(size_t level,
                     // switch to the next overlapping sst
                     if (idxInOverlapInKeys >= currentOverlappingSST->numOfKeys) {
                         idxInOverlapInKeys = 0;
-                        currentOverlappingSST = ++idxInOverlap < numOfOverlap ? overlap[++idxInOverlap] : nullptr;
+                        currentOverlappingSST = ++idxInOverlap < numOfOverlap ? overlap[idxInOverlap] : nullptr;
                     }
                 }
             };
@@ -588,7 +636,10 @@ vector<SSTablePtr> KVStore::startMerge(size_t level,
                 if (key1 < key2) {
                     chooseSST = true;
                     key = key1;
-                    curTimeStamp = key1 < key2 ? sst->timeStamp : currentOverlappingSST->timeStamp;
+                    curTimeStamp = sst->timeStamp;
+                } else {
+                    key = key2;
+                    curTimeStamp = currentOverlappingSST->timeStamp;
                 }
             }
 

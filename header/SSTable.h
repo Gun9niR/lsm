@@ -73,4 +73,7 @@ inline bool operator<(const pair<SSTablePtr, size_t>& p1, const pair<SSTablePtr,
             (t1->keys[p1.second] == t2->keys[p2.second] && t1->timeStamp < t2->timeStamp);
 }
 
+inline bool operator<(const SSTablePtr &t1, const SSTablePtr &t2) {
+    return t1->timeStamp < t2->timeStamp;
+}
 #endif //LSM_SSTABLE_H

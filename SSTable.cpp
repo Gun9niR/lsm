@@ -41,9 +41,9 @@ ostream& operator<<(ostream & ostream, const SSTable &ssTable) {
             << "Max Key: " << ssTable.maxKey << endl
             << "Keys: ";
 
-    for (const Key& key: ssTable.keys) {
-        ostream << key << " ";
-    }
+//    for (const Key& key: ssTable.keys) {
+//        ostream << key << " ";
+//    }
     ostream << endl;
     return ostream;
 }

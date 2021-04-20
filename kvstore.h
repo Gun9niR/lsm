@@ -1,3 +1,5 @@
+#include <__bit_reference>
+
 #pragma once
 
 #include "header/SSTable.h"
@@ -27,11 +29,11 @@ private:
 
     static void save(SSTablePtr&, size_t, Size, Key, Key, vector<shared_ptr<String>>&);
 
-    void reconstructLevel(size_t, const shared_ptr<unordered_set<SSTablePtr>>&);
+    void reconstructLevel(size_t, const shared_ptr<set<SSTablePtr>>&);
 
-    void reconstructLevel(size_t, unordered_set<size_t>&, vector<SSTablePtr>&);
+    void reconstructLevel(size_t, unordered_set<SSTablePtr>&, vector<SSTablePtr>&);
 
-    shared_ptr<unordered_set<SSTablePtr>> getSSTForCompaction(size_t, size_t);
+    shared_ptr<set<SSTablePtr>> getSSTForCompaction(size_t, size_t);
 
     static SSTablePtr binarySearch(const LevelPtr&, const Key&);
 
@@ -48,5 +50,5 @@ public:
 
 	void reset() override;
 
-	void printSSTables();
+    __unused    void printSSTables();
 };
