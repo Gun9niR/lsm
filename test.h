@@ -15,9 +15,9 @@ public:
 	uint64_t nr_phases;
 	uint64_t nr_passed_phases;
 
-#define EXPECT(key, exp, got) expect<decltype(got)>(key, (exp), (got), __FILE__, __LINE__)
+#define EXPECT(key, exp, got) expect<decltype(got)>((key), (exp), (got), __FILE__, __LINE__)
 	template<typename T>
-	void expect(const uint64_t key, const T &exp, const T &got,
+	void expect(uint64_t key, const T &exp, const T &got,
 		    const std::string &file, int line)
 	{
 		++nr_tests;
@@ -28,7 +28,7 @@ public:
 
 		if (verbose) {
 			std::cerr << "TEST Error @" << file << ":" << line;
-			std::cerr << ", key: " << key;
+			std::cerr << ", expect: " << key + 1;
 			std::cerr << ", got " << got << std::endl;
 		}
 	}

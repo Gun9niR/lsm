@@ -34,6 +34,8 @@ SSTable::SSTable(const String & fileFullPath) {
 }
 
 ostream& operator<<(ostream & ostream, const SSTable &ssTable) {
+    auto allValues = ssTable.getAllValues();
+
     ostream << "Path: " << ssTable.fullPath << endl
             << "Timestamp: " << ssTable.timeStamp << endl
             << "Number of keys: " << ssTable.numOfKeys << endl
@@ -41,9 +43,15 @@ ostream& operator<<(ostream & ostream, const SSTable &ssTable) {
             << "Max Key: " << ssTable.maxKey << endl
             << "Keys: ";
 
-//    for (const Key& key: ssTable.keys) {
-//        ostream << key << " ";
-//    }
+
+    for (int i = 0; i < ssTable.numOfKeys; ++i) {
+        ostream << ssTable.keys[i] << " " << "(";
+        if (*(allValues->at(i)) == DELETION_MARK) {
+            cout << DELETION_MARK << ") ";
+        } else {
+            cout << (allValues->at(i)->size() == ssTable.keys[i] + 1 ? "ok" : "!!!!!!!" + to_string(allValues->at(i)->size())) << ") ";
+        }
+    }
     ostream << endl;
     return ostream;
 }
@@ -151,6 +159,7 @@ shared_ptr<vector<StringPtr>> SSTable::getAllValues() const {
     }
 
     size_t length = fileSize - offset[numOfKeys - 1];
+
     StringPtr value = make_shared<String>(length, 0);
     file.read(&(*value)[0], length);
     ret->emplace_back(value);

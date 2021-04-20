@@ -7,7 +7,7 @@
 class CorrectnessTest : public Test {
 private:
 	const uint64_t SIMPLE_TEST_MAX = 512;
-	const uint64_t LARGE_TEST_MAX = 1024 * 64;
+	const uint64_t LARGE_TEST_MAX = 1024 * 7;
 
 	void regular_test(uint64_t max)
 	{
@@ -24,11 +24,15 @@ private:
 		phase();
 
 		// Test multiple key-value pairs
-        for (i = 0; i < max; i += 2) {
+        for (i = 0; i < max; i += 3) {
             store.put(i, std::string(i+1, 's'));
             EXPECT(i, std::string(i+1, 's'), store.get(i));
         }
-        for (i = 1; i < max; i += 2) {
+        for (i = 1; i < max; i += 3) {
+            store.put(i, std::string(i+1, 's'));
+            EXPECT(i, std::string(i+1, 's'), store.get(i));
+        }
+        for (i = 2; i < max; i += 3) {
             store.put(i, std::string(i+1, 's'));
             EXPECT(i, std::string(i+1, 's'), store.get(i));
         }
@@ -50,6 +54,8 @@ private:
 		for (i = 1; i < max; ++i)
 			EXPECT(i, i & 1, store.del(i));
 
+        for (i = 0; i < max; ++i)
+            EXPECT(i, false, store.del(i));
 		phase();
 
 		report();
@@ -74,6 +80,9 @@ public:
 
 int main(int argc, char *argv[])
 {
+	clock_t startTime,endTime;
+	startTime = clock();
+
 	bool verbose = (argc == 2 && std::string(argv[1]) == "-v");
 
 	std::cout << "Usage: " << argv[0] << " [-v]" << std::endl;
@@ -85,5 +94,9 @@ int main(int argc, char *argv[])
 	CorrectnessTest test("./data", verbose);
 
 	test.start_test();
+
+    // debug
+	endTime = clock();
+	cout << "Total Time : " <<(double)(endTime - startTime) / CLOCKS_PER_SEC << "s" << endl;
 	return 0;
 }
