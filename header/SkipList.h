@@ -72,7 +72,7 @@ public:
 
     void reset();
 
-    SSTablePtr toFile(TimeStamp, const String &);
+    SSTablePtr toFile(TimeStamp, uint64_t, const String &);
 
     bool isEmpty();
 };
@@ -272,9 +272,9 @@ typename SkipList<Key, Value>::NodePtr SkipList<Key, Value>::getNode(const Key& 
 }
 
 template<typename Key, typename Value>
-SSTablePtr SkipList<Key, Value>::toFile(TimeStamp timeStamp, const String &dir) {
+SSTablePtr SkipList<Key, Value>::toFile(TimeStamp timeStamp, uint64_t sstNo, const String &dir) {
     String level0Path = dir + "/level-0";
-    String filePath = level0Path + "/" + std::to_string(timeStamp) + ".sst";
+    String filePath = level0Path + "/" + std::to_string(sstNo) + ".sst";
 
     Key minKey = getMinKey();
     Key maxKey = getMaxKey();

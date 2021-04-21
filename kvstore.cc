@@ -8,7 +8,7 @@
  * @Description: Construct KVStore object with given base directory
  * @param dir: base directory, where all SSTs are stored
  */
-KVStore::KVStore(const String &dir): KVStoreAPI(dir), dir(dir), timeStamp(1) {
+KVStore::KVStore(const String &dir): KVStoreAPI(dir), dir(dir), timeStamp(1), sstNo(1) {
     vector<String> levelList;
     int levelNum = utils::scanDir(dir, levelList);
 
@@ -30,7 +30,12 @@ KVStore::KVStore(const String &dir): KVStoreAPI(dir), dir(dir), timeStamp(1) {
 
         String levelNameWithSlash = dirWithSlash + levelList[i] + "/";
         for (int j = 0; j < fileNum; ++j) {
-            auto ssTablePtr = make_shared<SSTable>(levelNameWithSlash + fileList[j]);
+            String &fileName = fileList[j];
+            size_t lastIndex = fileName.find_last_of('.');
+            uint64_t fileSSTNo = std::stoi(fileName.substr(0, lastIndex));
+            sstNo = fileSSTNo >= sstNo ? fileSSTNo + 1 : sstNo;
+
+            auto ssTablePtr = make_shared<SSTable>(levelNameWithSlash + fileName);
             (*levelPtr)[j] = ssTablePtr;
 
             if (ssTablePtr->timeStamp >= timeStamp) {
@@ -47,7 +52,6 @@ KVStore::KVStore(const String &dir): KVStoreAPI(dir), dir(dir), timeStamp(1) {
 
         ssTables[i] = levelPtr;
     }
-
 #ifdef DEBUG
     cout << "========== Before  ==========" << endl;
     printSSTables();
@@ -59,7 +63,7 @@ KVStore::KVStore(const String &dir): KVStoreAPI(dir), dir(dir), timeStamp(1) {
  */
 KVStore::~KVStore() {
     if (!memTable.isEmpty()) {
-        SSTablePtr sst = memTable.toFile(timeStamp++, dir);
+        SSTablePtr sst = memTable.toFile(timeStamp, sstNo++, dir);
         ssTables[0]->emplace_back(sst);
         compaction();
     }
@@ -74,7 +78,8 @@ void KVStore::put(Key key, const String &s) {
     try {
         memTable.put(key, s);
     } catch (const MemTableFull &) {
-        SSTablePtr ssTablePtr = memTable.toFile(timeStamp++, dir);
+        SSTablePtr ssTablePtr = memTable.toFile(timeStamp, sstNo++, dir);
+        ++timeStamp;
 #ifdef DEBUG
         cout << "========== MEM TO DISK ==========" << endl;
         cout << *ssTablePtr << endl;
@@ -268,7 +273,7 @@ void KVStore::compaction() {
         for (auto sstIt = curLevelDiscard->begin(); sstIt != curLevelDiscard->end(); ++sstIt) {
             SSTablePtr sst = *sstIt;
             String oldPath = sst->fullPath;
-            sst->fullPath = levelName + "/" + to_string(sst->timeStamp) + ".sst";
+            sst->fullPath = levelName + "/" + to_string(sstNo++) + ".sst";
 
             ifstream src(oldPath, ios::binary);
             ofstream dst(sst->fullPath, ios::binary);
@@ -323,8 +328,9 @@ void KVStore::compaction(size_t level, bool shouldRemoveDeletionMark) {
 
         // step3: merge that vector and this singe sstable, files are created along the way
         // but if there's no overlapping sst, just copy the file
+        TimeStamp maxTimeStamp = getMaxTimeStamp(curLevelDiscard, nextLevelDiscard);
 
-        vector<SSTablePtr> mergeResult = startMerge(level + 1, ssTablePtr, overlap, allValues, shouldRemoveDeletionMark);
+        vector<SSTablePtr> mergeResult = startMerge(level + 1, maxTimeStamp, ssTablePtr, overlap, allValues, shouldRemoveDeletionMark);
 
 #ifdef DEBUG
         cout << "================= merge result =================" << endl;
@@ -335,21 +341,21 @@ void KVStore::compaction(size_t level, bool shouldRemoveDeletionMark) {
         // step4: use reconstruct() to rebuild the next level
 
 #ifdef DEBUG
-        cout << "================= before reconstruct =================" << endl;
-        LevelPtr nextLevel = ssTables[level + 1];
-        for (auto i = nextLevel->begin(); i != nextLevel->end(); ++i) {
-            cout << **i << endl;
-        }
+//        cout << "================= before reconstruct =================" << endl;
+//        LevelPtr nextLevel = ssTables[level + 1];
+//        for (auto i = nextLevel->begin(); i != nextLevel->end(); ++i) {
+//            cout << **i << endl;
+//        }
 #endif
 
         reconstructLevel(level + 1, nextLevelDiscard, mergeResult);
 
 #ifdef DEBUG
-        LevelPtr newNextLevel = ssTables[level + 1];
-        cout << "================= after reconstruct =================" << endl;
-        for (auto i = newNextLevel->begin(); i != newNextLevel->end(); ++i) {
-            cout << **i << endl;
-        }
+//        LevelPtr newNextLevel = ssTables[level + 1];
+//        cout << "================= after reconstruct =================" << endl;
+//        for (auto i = newNextLevel->begin(); i != newNextLevel->end(); ++i) {
+//            cout << **i << endl;
+//        }
 #endif
     }
 
@@ -365,14 +371,20 @@ void KVStore::compaction(size_t level, bool shouldRemoveDeletionMark) {
  * @Param allValues: The values that are stored in SSTs in the priority queue
  * @Return: A vector of new SSTs as the result of the merge
  */
-vector<SSTablePtr> KVStore::startMerge(size_t level, priority_queue<pair<SSTablePtr, size_t>>& pq, unordered_map<SSTablePtr, shared_ptr<vector<StringPtr>>>& allValues) {
+vector<SSTablePtr> KVStore::startMerge(const size_t level,
+                                       const size_t maxTimeStamp,
+                                       priority_queue<pair<SSTablePtr, size_t>>& pq,
+                                       unordered_map<SSTablePtr,
+                                       shared_ptr<vector<StringPtr>>>& allValues) {
+
     vector<SSTablePtr> ret;
+    unordered_set<Key> duplicateChecker;
 
     while (!pq.empty()) {
-        // init fields for new sstable
+        // init fields for new SSTable
         SSTablePtr newSSTPtr = make_shared<SSTable>();
-        newSSTPtr->fullPath = dir + "/level-" + to_string(level) + "/" + to_string(timeStamp) + ".sst";
-        newSSTPtr->timeStamp = timeStamp++;
+        newSSTPtr->fullPath = dir + "/level-" + to_string(level) + "/" + to_string(sstNo++) + ".sst";
+        newSSTPtr->timeStamp = maxTimeStamp;
 
         size_t fileSize = HEADER_SIZE + BLOOM_FILTER_SIZE;
         Size numOfKeys = 0;
@@ -381,15 +393,16 @@ vector<SSTablePtr> KVStore::startMerge(size_t level, priority_queue<pair<SSTable
 
         vector<StringPtr> values;
 
-        // start merging data into the new sstable
+        // start merging data into the new SSTable
         while (!pq.empty()) {
             auto sstAndIdx = pq.top();
             pq.pop();
 
             SSTablePtr sst = sstAndIdx.first;
             size_t idx = sstAndIdx.second;
+            Key key = sst->keys[idx];
             // key already exists, do nothing except check if there's any key left in this sst
-            if (!newSSTPtr->keys.empty() && newSSTPtr->keys.back() == sst->keys[idx]) {
+            if (duplicateChecker.count(key)) {
                 if (++idx < sst->numOfKeys) {
                     pq.push(make_pair(sst, idx));
                 } else {
@@ -410,8 +423,8 @@ vector<SSTablePtr> KVStore::startMerge(size_t level, priority_queue<pair<SSTable
                 break;
             }
             // pass all checks, can modify sstable in memory and write to disk
-            Key key = sst->keys[idx];
             fileSize += INDEX_SIZE_PER_VALUE + value->size();
+            duplicateChecker.insert(key);
             values.emplace_back(value);
             newSSTPtr->bloomFilter.put(key);
             newSSTPtr->keys.emplace_back(key);
@@ -493,6 +506,7 @@ void KVStore::compactionLevel0() {
 
     size_t level0Size = level0Ptr->size();
 
+    size_t maxTimeStamp;
 
     // 将level0中的ssTable全部放入优先级队列
     priority_queue<pair<SSTablePtr, size_t>> pq;
@@ -518,12 +532,14 @@ void KVStore::compactionLevel0() {
         maxKey = maKey > maxKey ? maKey : maxKey;
     }
 
+    maxTimeStamp = level0Ptr->back()->timeStamp;
+
     // 需要创建第二层
     if (ssTables.size() == 1) {
         if (!utils::dirExists(dir + "/level-1")) {
             utils::mkdir((dir + "/level-1").c_str());
         }
-        vector<SSTablePtr> mergeResult = startMerge(1, pq, values);
+        vector<SSTablePtr> mergeResult = startMerge(1, maxTimeStamp, pq, values);
 
 #ifdef DEBUG
         cout << "================= merge result =================" << endl;
@@ -540,16 +556,18 @@ void KVStore::compactionLevel0() {
 
         for (int i = 0; i < level1Size; ++i) {
             SSTablePtr ssTablePtrToPush = level1Ptr->at(i);
+            TimeStamp ts = ssTablePtrToPush->timeStamp;
             // find all overlapping sstables at level1
             // todo: could use upper and lower bound
             if (ssTablePtrToPush->getMinKey() <= maxKey && ssTablePtrToPush->getMaxKey() >= minKey) {
                 pq.push(make_pair(ssTablePtrToPush, 0));
                 values[ssTablePtrToPush] = ssTablePtrToPush->getAllValues();
                 nextLevelDiscard.insert(ssTablePtrToPush);
+                maxTimeStamp = ts > maxTimeStamp ? ts : maxTimeStamp;
             }
         }
 
-        vector<SSTablePtr> mergeResult = startMerge(1, pq, values);
+        vector<SSTablePtr> mergeResult = startMerge(1, maxTimeStamp, pq, values);
 #ifdef DEBUG
         cout << "================= merge result =================" << endl;
         for (auto i: mergeResult) {
@@ -615,7 +633,8 @@ shared_ptr<set<SSTablePtr>> KVStore::getSSTForCompaction(size_t level, size_t k)
     return ret;
 }
 
-vector<SSTablePtr> KVStore::startMerge(size_t level,
+vector<SSTablePtr> KVStore::startMerge(const size_t level,
+                                       const size_t maxTimeStamp,
                                        const SSTablePtr& sst,
                                        vector<SSTablePtr> &overlap,
                                        unordered_map<SSTablePtr, shared_ptr<vector<StringPtr>>>& allValues,
@@ -641,8 +660,6 @@ vector<SSTablePtr> KVStore::startMerge(size_t level,
 //        }
 //        cout << endl;
     }
-
-
 #endif
 
     vector<SSTablePtr> ret;
@@ -677,8 +694,8 @@ vector<SSTablePtr> KVStore::startMerge(size_t level,
     // while there is still a nonempty sst in overlap or on top, start creating a new SST
     while (shouldContinueMerge()) {
         SSTablePtr newSSTPtr = make_shared<SSTable>();
-        newSSTPtr->fullPath = dir + "/level-" + to_string(level) + "/" + to_string(timeStamp) + ".sst";
-        newSSTPtr->timeStamp = timeStamp++;
+        newSSTPtr->fullPath = dir + "/level-" + to_string(level) + "/" + to_string(sstNo++) + ".sst";
+        newSSTPtr->timeStamp = maxTimeStamp;
 
         size_t fileSize = HEADER_SIZE + BLOOM_FILTER_SIZE;
         Size numOfKeys = 0;
@@ -720,7 +737,7 @@ vector<SSTablePtr> KVStore::startMerge(size_t level,
             } else {
                 Key key1 = sst->keys[idxInSST];
                 Key key2 = currentOverlappingSST->keys[idxInOverlapInKeys];
-                if (key1 < key2) {
+                if (key1 <= key2) {
                     chooseSST = true;
                     key = key1;
                     curTimeStamp = sst->timeStamp;
@@ -730,12 +747,13 @@ vector<SSTablePtr> KVStore::startMerge(size_t level,
                 }
             }
 
-            // check for duplicate key, only handle error cases
-            if (!newSSTPtr->keys.empty() && newSSTPtr->keys.back() == key) {
+            // check for duplicate key, only handle error case
+            if (timeStamps.count(key)) {
                 // if timeStamp is larger, overwrite
                 if (curTimeStamp > timeStamps[key]) {
                     // should overwrite
                     shouldOverwrite = true;
+                    cout << "really??" << endl;
                 } else {
                     // increment index, there are two scenarios depending on chooseSST
                     incrementIdx(chooseSST);
@@ -763,8 +781,8 @@ vector<SSTablePtr> KVStore::startMerge(size_t level,
                 save(newSSTPtr, fileSize, numOfKeys, minKey, maxKey, values);
                 ret.emplace_back(newSSTPtr);
 #ifdef DEBUG
-                cout << "========== One SST ==========" << endl;
-                cout << *newSSTPtr << endl;
+//                cout << "========== One SST ==========" << endl;
+//                cout << *newSSTPtr << endl;
 #endif
                 break;
             }
@@ -790,8 +808,8 @@ vector<SSTablePtr> KVStore::startMerge(size_t level,
         if (!shouldContinueMerge() && !values.empty()) {
             save(newSSTPtr, fileSize, numOfKeys, minKey, maxKey, values);
 #ifdef DEBUG
-            cout << "========== One SST ==========" << endl;
-            cout << *newSSTPtr << endl;
+//            cout << "========== One SST ==========" << endl;
+//            cout << *newSSTPtr << endl;
 #endif
             ret.emplace_back(newSSTPtr);
         }
@@ -804,3 +822,20 @@ vector<SSTablePtr> KVStore::startMerge(size_t level,
     }
     return ret;
 }
+
+TimeStamp KVStore::getMaxTimeStamp(const shared_ptr<set<SSTablePtr>> &curLevelDiscard,
+                                   const set<SSTablePtr> &nextLevelDiscard) {
+    TimeStamp ret = 0;
+    TimeStamp curTimeStamp;
+
+    for (auto sstIt = curLevelDiscard->begin(); sstIt != curLevelDiscard->end(); ++sstIt) {
+        curTimeStamp = (*sstIt)->timeStamp;
+        ret = curTimeStamp > ret ? curTimeStamp : ret;
+    }
+    for (const auto& sstPtr: nextLevelDiscard) {
+        curTimeStamp = sstPtr->timeStamp;
+        ret = curTimeStamp > ret ? curTimeStamp : ret;
+    }
+    return ret;
+}
+

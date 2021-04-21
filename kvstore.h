@@ -14,6 +14,8 @@ private:
 
     TimeStamp timeStamp;
 
+    uint64_t sstNo;
+
     vector<LevelPtr> ssTables;
 
     void compaction();
@@ -22,9 +24,9 @@ private:
 
     void compactionLevel0();
 
-    vector<SSTablePtr> startMerge(size_t, priority_queue<pair<SSTablePtr, size_t>> &, unordered_map<SSTablePtr, shared_ptr<vector<StringPtr>>>&);
+    vector<SSTablePtr> startMerge(size_t, size_t, priority_queue<pair<SSTablePtr, size_t>> &, unordered_map<SSTablePtr, shared_ptr<vector<StringPtr>>>&);
 
-    vector<SSTablePtr> startMerge(size_t, const SSTablePtr&, vector<SSTablePtr>&, unordered_map<SSTablePtr, shared_ptr<vector<StringPtr>>>&, bool);
+    vector<SSTablePtr> startMerge(size_t, size_t, const SSTablePtr&, vector<SSTablePtr>&, unordered_map<SSTablePtr, shared_ptr<vector<StringPtr>>>&, bool);
 
     static void save(SSTablePtr&, size_t, Size, Key, Key, vector<shared_ptr<String>>&);
 
@@ -33,6 +35,8 @@ private:
     void reconstructLevel(size_t, set<SSTablePtr>&, vector<SSTablePtr>&);
 
     shared_ptr<set<SSTablePtr>> getSSTForCompaction(size_t, size_t);
+
+    static TimeStamp getMaxTimeStamp(const shared_ptr<set<SSTablePtr>>&, const set<SSTablePtr>&);
 
     static SSTablePtr binarySearch(const LevelPtr&, const Key&);
 
