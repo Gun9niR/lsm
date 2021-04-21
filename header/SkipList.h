@@ -36,35 +36,35 @@ private:
 
     NodePtr head;
 
-    Size _size;     // deleted也算是一条记录
+    Size _size;
 
     Size _fileSize;
 
-    Key getMinKey();
-
-    Key getMaxKey();
-
 private:
-    bool shouldInsertUp();
+    static bool shouldInsertUp();
 
     // 在替换时计算文件大小的改变
-    int computeFileSizeChange(const Value &, const Value &);
+    static int computeFileSizeChange(const Value &, const Value &);
 
     // 在插入时计算文件大小的改变
-    int computeFileSizeChange(const Value &);
+    static int computeFileSizeChange(const Value &);
 
-    NodePtr getNode(const Key &);
+    NodePtr getNode(const Key &) const;
 
-    NodePtr getBottomHead();
+    NodePtr getBottomHead() const;
+
+    Key getMinKey() const;
+
+    Key getMaxKey() const;
 
 public:
     SkipList();
 
-    Size size();
+    Size size() const ;
 
-    Size fileSize();
+    Size fileSize() const;
 
-    Value *get(const Key &);
+    Value *get(const Key &) const;
 
     void put(const Key &, const Value &);
 
@@ -72,9 +72,9 @@ public:
 
     void reset();
 
-    SSTablePtr toFile(TimeStamp, uint64_t, const String &);
+    SSTablePtr toFile(TimeStamp, uint64_t, const String &) const;
 
-    bool isEmpty();
+    bool isEmpty() const;
 };
 
 template<typename Key, typename Value>
@@ -85,18 +85,17 @@ SkipList<Key, Value>::SkipList() {
 }
 
 template<typename Key, typename Value>
-Size SkipList<Key, Value>::size() {
+Size SkipList<Key, Value>::size() const {
     return _size;
 }
 
 template<typename Key, typename Value>
-Size SkipList<Key, Value>::fileSize() {
+Size SkipList<Key, Value>::fileSize() const {
     return _fileSize;
 }
 
-// 如果查找不到，返回nullptr
 template<typename Key, typename Value>
-Value* SkipList<Key, Value>::get(const Key& key) {
+Value* SkipList<Key, Value>::get(const Key& key) const {
     if (!bloomFilter.isProbablyPresent(key)) {
         return nullptr;
     }
@@ -243,20 +242,30 @@ bool SkipList<Key, Value>::shouldInsertUp() {
     return rand() & 1;
 }
 
+/**
+ * @Description: Compute the file size change for a replacement of value
+ *               The return type is int, but it should not overflow, because the index is not that large
+ * @Param oldValue: The old value to be replaced
+ * @Param newValue: The new value
+ * @Return: Change of file size in bytes
+ */
 template<typename Key, typename Value>
-int SkipList<Key, Value>::computeFileSizeChange(const Value& oldValue, const Value& newValue) {
-    // shouldn't overflow, because string is not that long
+inline int SkipList<Key, Value>::computeFileSizeChange(const Value& oldValue, const Value& newValue) {
     return (int)newValue.size() - (int)oldValue.size();
 }
 
+/**
+ * @Description: Compute the file size change for an addition of value
+ * @param value: The new Value
+ * @Return: Change of file size in bytes
+ */
 template<typename Key, typename Value>
-int SkipList<Key, Value>::computeFileSizeChange(const Value &value) {
-    // shoud + 1 ?
+inline int SkipList<Key, Value>::computeFileSizeChange(const Value &value) {
     return INDEX_SIZE_PER_VALUE + (int)value.size();
 }
 
 template<typename Key, typename Value>
-typename SkipList<Key, Value>::NodePtr SkipList<Key, Value>::getNode(const Key& key) {
+typename SkipList<Key, Value>::NodePtr SkipList<Key, Value>::getNode(const Key& key) const {
     NodePtr node = head;
     while (node) {
         while (node->right && node->right->key < key) {
@@ -271,8 +280,15 @@ typename SkipList<Key, Value>::NodePtr SkipList<Key, Value>::getNode(const Key& 
     return nullptr;
 }
 
+/**
+ * Description: Write the content of memory to disk in an SST
+ * @Param timeStamp: The timestamp of the SST
+ * @Param sstNo: The fileName of the SST
+ * @Param dir: Base directory to store files in
+ * @Return: The in-memory representation of SST that is written to disk
+ */
 template<typename Key, typename Value>
-SSTablePtr SkipList<Key, Value>::toFile(TimeStamp timeStamp, uint64_t sstNo, const String &dir) {
+SSTablePtr SkipList<Key, Value>::toFile(TimeStamp timeStamp, uint64_t sstNo, const String &dir) const {
     String level0Path = dir + "/level-0";
     String filePath = level0Path + "/" + std::to_string(sstNo) + ".sst";
 
@@ -335,17 +351,14 @@ SSTablePtr SkipList<Key, Value>::toFile(TimeStamp timeStamp, uint64_t sstNo, con
 }
 
 template<typename Key, typename Value>
-Key SkipList<Key, Value>::getMinKey() {
-    // delete的key也算进去
+inline Key SkipList<Key, Value>::getMinKey() const {
     NodePtr nodePtr = getBottomHead();
-
     nodePtr = nodePtr->right;
-
     return nodePtr ? nodePtr->key : std::numeric_limits<Key>::quiet_NaN();
 }
 
 template<typename Key, typename Value>
-Key SkipList<Key, Value>::getMaxKey() {
+Key SkipList<Key, Value>::getMaxKey() const {
     // delete的key也算进去，这样合并才能把删除记录合并
     NodePtr nodePtr = head;
 
@@ -363,8 +376,12 @@ Key SkipList<Key, Value>::getMaxKey() {
     return nodePtr ? nodePtr->key : std::numeric_limits<Key>::quiet_NaN();
 }
 
+/**
+ * @Description: The utility function that gets the head of the bottom level of the skiplist
+ * @Return: Pointer to the header node
+ */
 template<typename Key, typename Value>
-typename SkipList<Key, Value>::NodePtr SkipList<Key, Value>::getBottomHead() {
+typename SkipList<Key, Value>::NodePtr SkipList<Key, Value>::getBottomHead() const {
     NodePtr node = head;
     while (node->down) {
         node = node->down;
@@ -373,7 +390,7 @@ typename SkipList<Key, Value>::NodePtr SkipList<Key, Value>::getBottomHead() {
 }
 
 template<typename Key, typename Value>
-bool SkipList<Key, Value>::isEmpty() {
+inline bool SkipList<Key, Value>::isEmpty() const {
     return _size == 0;
 }
 

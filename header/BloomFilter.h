@@ -17,7 +17,7 @@ public:
     bool isProbablyPresent(const Key &) const;
 
     // write the array into a file
-    void toFile(ofstream &);
+    void toFile(ofstream &) const;
 
     // read array from a file
     void fromFile(ifstream &);
@@ -51,17 +51,17 @@ bool BloomFilter<Key>::isProbablyPresent(const Key& key) const {
 }
 
 template<typename Key>
-void BloomFilter<Key>::toFile(ofstream &ssTable) {
+inline void BloomFilter<Key>::toFile(ofstream &ssTable) const {
     ssTable.write((char *)filter, BLOOM_FILTER_SIZE);
 }
 
 template<typename Key>
-void BloomFilter<Key>::reset() {
+inline void BloomFilter<Key>::reset() {
     memset(filter, 0, BLOOM_FILTER_SIZE);
 }
 
 template<typename Key>
-void BloomFilter<Key>::fromFile(ifstream &ssTable) {
+inline void BloomFilter<Key>::fromFile(ifstream &ssTable) {
     ssTable.read((char *)filter, BLOOM_FILTER_SIZE);
 }
 

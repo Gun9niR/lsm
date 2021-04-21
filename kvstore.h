@@ -40,6 +40,10 @@ private:
 
     static SSTablePtr binarySearch(const LevelPtr&, const Key&);
 
+    static long upperBound(const LevelPtr&, Key);
+
+    static long lowerBound(const LevelPtr&, Key);
+
 public:
 	explicit KVStore(const String &dir);
 
