@@ -52,6 +52,7 @@ KVStore::KVStore(const String &dir) : KVStoreAPI(dir), dir(dir), timeStamp(1), s
 
         ssTables[i] = levelPtr;
     }
+    compaction();
 #ifdef DEBUG
     cout << "========== Before  ==========" << endl;
     printSSTables();
@@ -429,7 +430,8 @@ vector<SSTablePtr> KVStore::startMerge(const size_t level,
             StringPtr value = allValues[sst]->at(idx);
 
             // check file size
-            if (fileSize + INDEX_SIZE_PER_VALUE + value->size() > MAX_SSTABLE_SIZE) {
+            size_t newFileSize = fileSize + INDEX_SIZE_PER_VALUE + value->size();
+            if (newFileSize > MAX_SSTABLE_SIZE) {
                 // put the value back
                 pq.push(make_pair(sst, idx));
                 save(newSSTPtr, fileSize, numOfKeys, minKey, maxKey, values);
@@ -437,7 +439,7 @@ vector<SSTablePtr> KVStore::startMerge(const size_t level,
                 break;
             }
             // pass all checks, can modify sstable in memory and write to disk
-            fileSize += INDEX_SIZE_PER_VALUE + value->size();
+            fileSize = newFileSize;
             duplicateChecker.insert(key);
             values.emplace_back(value);
             newSSTPtr->bloomFilter.put(key);
@@ -694,17 +696,18 @@ vector<SSTablePtr> KVStore::startMerge(const size_t level,
     size_t idxInOverlap = 0;
     // where am I in current overlapping sst?
     size_t idxInOverlapInKeys = 0;
-    // the sst in overlap that is currently being merged
-    SSTablePtr currentOverlappingSST = overlap[0];
     // how many keys are there in the upper level
     const size_t numOfSSTKey = sst->numOfKeys;
     // where am I in key of sst?
     size_t idxInSST = 0;
+    // the sst in overlap that is currently being merged
+    SSTablePtr currentOverlappingSST = overlap[idxInOverlap];
     // lambda function to tell if there's any sst to merge
     auto shouldContinueMerge = [&]() { return idxInOverlap < numOfOverlap || idxInSST < numOfSSTKey; };
 
-    // while there is still a nonempty sst in overlap or on top, start creating a new SST
+    // merge a new SST
     while (shouldContinueMerge()) {
+        // mergeOneSST(level, maxTimeStamp, shouldContinueMerge, incrementIdx)
         SSTablePtr newSSTPtr = make_shared<SSTable>();
         newSSTPtr->fullPath = dir + "/level-" + to_string(level) + "/" + to_string(sstNo++) + ".sst";
         newSSTPtr->timeStamp = maxTimeStamp;
@@ -715,6 +718,7 @@ vector<SSTablePtr> KVStore::startMerge(const size_t level,
         Key maxKey = std::numeric_limits<Key>::min();
 
         vector<StringPtr> values;
+        // in each loop, put one key into sst
         while (shouldContinueMerge()) {
             Key key;
             bool chooseSST = false;
