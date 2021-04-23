@@ -8,7 +8,7 @@
  * @Description: Construct KVStore object with given base directory
  * @param dir: base directory, where all SSTs are stored
  */
-KVStore::KVStore(const String &dir): KVStoreAPI(dir), dir(dir), timeStamp(1), sstNo(1) {
+KVStore::KVStore(const String &dir) : KVStoreAPI(dir), dir(dir), timeStamp(1), sstNo(1) {
     vector<String> levelList;
     int levelNum = utils::scanDir(dir, levelList);
 
@@ -98,13 +98,13 @@ void KVStore::put(Key key, const String &s) {
  * @Return: the (string) value of the given key. Empty string indicates not found.
  */
 String KVStore::get(Key key) {
-    String* valueInMemory = memTable.get(key);
+    String *valueInMemory = memTable.get(key);
     if (valueInMemory) {
         return *valueInMemory == DELETION_MARK ? "" : *valueInMemory;
     }
 
     // memory中没有找到，在内存中找
-    for (const LevelPtr& levelPtr: ssTables) {
+    for (const LevelPtr &levelPtr: ssTables) {
         if (levelPtr == *ssTables.begin()) {
             // level-0，在这一层顺序找
             for (auto ssTableItr = levelPtr->rbegin(); ssTableItr != levelPtr->rend(); ++ssTableItr) {
@@ -123,9 +123,6 @@ String KVStore::get(Key key) {
                 shared_ptr<String> valuePtr = ssTablePtr->get(key);
                 if (valuePtr) {
                     String value = *valuePtr;
-//                    if (value != DELETION_MARK && key == 1) {
-//                        cout << "1 found in: " << ssTablePtr->fullPath << endl;
-//                    }
                     return value == DELETION_MARK ? "" : value;
                 }
             }
@@ -150,7 +147,7 @@ bool KVStore::del(Key key) {
         return false;
     }
 
-    for (const LevelPtr& levelPtr: ssTables) {
+    for (const LevelPtr &levelPtr: ssTables) {
         if (levelPtr == *ssTables.begin()) {
             // level-0，在这一层顺序找
             for (auto ssTableItr = levelPtr->rbegin(); ssTableItr != levelPtr->rend(); ++ssTableItr) {
@@ -196,7 +193,7 @@ void KVStore::reset() {
         utils::scanDir(dirWithSlash + levelList[i], fileList);
 
         String levelNameWithSlash = dirWithSlash + levelList[i] + "/";
-        for (String& fileName: fileList) {
+        for (String &fileName: fileList) {
             utils::rmfile((levelNameWithSlash + fileName).c_str());
         }
 
@@ -210,11 +207,11 @@ void KVStore::reset() {
  * @Param key: Key to search with
  * @Return: Pointer to the SST that is found
  */
-SSTablePtr KVStore::binarySearch(const LevelPtr& levelPtr,const Key& key) {
+SSTablePtr KVStore::binarySearch(const LevelPtr &levelPtr, const Key &key) {
     long left = 0;
     long right = levelPtr->size() - 1;
     while (left <= right) {
-        long mid = (left + right) >> 1;
+        long mid = left + ((right - left) >> 1);
         SSTablePtr ret = (*levelPtr)[mid];
         if (ret->contains(key)) {
             return ret;
@@ -235,7 +232,7 @@ __unused void KVStore::printSSTables() {
     for (int i = 0; i < numOfLevels; ++i) {
         cout << "Level " << i << endl;
         Level level = *ssTables[i]; //
-        for (const SSTablePtr& ssTablePtr: level) {
+        for (const SSTablePtr &ssTablePtr: level) {
             cout << *ssTablePtr << endl;
         }
     }
@@ -266,7 +263,8 @@ void KVStore::compaction() {
             utils::mkdir(levelName.c_str());
         }
 
-        auto curLevelDiscard = getSSTForCompaction(numOfLevelsToIterate, lastLevelPtr->size() - (2 << numOfLevelsToIterate));
+        auto curLevelDiscard = getSSTForCompaction(numOfLevelsToIterate,
+                                                   lastLevelPtr->size() - (2 << numOfLevelsToIterate));
 
         LevelPtr newLevel = make_shared<Level>();
 
@@ -389,9 +387,9 @@ void KVStore::compaction(size_t level, bool shouldRemoveDeletionMark) {
  */
 vector<SSTablePtr> KVStore::startMerge(const size_t level,
                                        const size_t maxTimeStamp,
-                                       priority_queue<pair<SSTablePtr, size_t>>& pq,
+                                       priority_queue<pair<SSTablePtr, size_t>> &pq,
                                        unordered_map<SSTablePtr,
-                                       shared_ptr<vector<StringPtr>>>& allValues) {
+                                               shared_ptr<vector<StringPtr>>> &allValues) {
 
     vector<SSTablePtr> ret;
     unordered_set<Key> duplicateChecker;
@@ -467,7 +465,8 @@ vector<SSTablePtr> KVStore::startMerge(const size_t level,
  * @Description: Given value of various fields of SSTable, initialize it with these values, and write it to disk
  * @Param ssTablePtr: Pointer to the SST to be initialized and saved
  */
-void KVStore::save(SSTablePtr& ssTablePtr, size_t fileSize, Size numOfKeys, Key minKey, Key maxKey, vector<shared_ptr<String>>& values) {
+void KVStore::save(SSTablePtr &ssTablePtr, size_t fileSize, Size numOfKeys, Key minKey, Key maxKey,
+                   vector<shared_ptr<String>> &values) {
     ssTablePtr->fileSize = fileSize;
     ssTablePtr->numOfKeys = numOfKeys;
     ssTablePtr->minKey = minKey;
@@ -495,7 +494,7 @@ void KVStore::save(SSTablePtr& ssTablePtr, size_t fileSize, Size numOfKeys, Key 
     ssTablePtr->toFile(values);
 }
 
-void KVStore::reconstructLevel(size_t level, const shared_ptr<set<SSTablePtr>>& sstToDiscard) {
+void KVStore::reconstructLevel(size_t level, const shared_ptr<set<SSTablePtr>> &sstToDiscard) {
     LevelPtr levelPtr = ssTables[level];
 
     size_t currentLevelSize = levelPtr->size();
@@ -594,7 +593,6 @@ void KVStore::compactionLevel0() {
             cout << *i << endl;
         }
 #endif
-
         reconstructLevel(1, nextLevelDiscard, mergeResult);
     }
 
@@ -640,7 +638,7 @@ shared_ptr<set<SSTablePtr>> KVStore::getSSTForCompaction(size_t level, size_t k)
     auto ret = make_shared<set<SSTablePtr>>();
     auto comparator = [](const SSTablePtr &t1, const SSTablePtr &t2) {
         return t1->timeStamp < t2->timeStamp ||
-            (t1->timeStamp == t2->timeStamp && t1->minKey < t2->minKey);
+               (t1->timeStamp == t2->timeStamp && t1->minKey < t2->minKey);
     };
 
     priority_queue<SSTablePtr, vector<SSTablePtr>, decltype(comparator)> pq(comparator);
@@ -675,9 +673,9 @@ shared_ptr<set<SSTablePtr>> KVStore::getSSTForCompaction(size_t level, size_t k)
  */
 vector<SSTablePtr> KVStore::startMerge(const size_t level,
                                        const size_t maxTimeStamp,
-                                       const SSTablePtr& sst,
+                                       const SSTablePtr &sst,
                                        vector<SSTablePtr> &overlap,
-                                       unordered_map<SSTablePtr, shared_ptr<vector<StringPtr>>>& allValues,
+                                       unordered_map<SSTablePtr, shared_ptr<vector<StringPtr>>> &allValues,
                                        bool shouldRemoveDeletionMark) {
 
 #ifdef DEBUG
@@ -696,13 +694,12 @@ vector<SSTablePtr> KVStore::startMerge(const size_t level,
     size_t idxInOverlap = 0;
     // where am I in current overlapping sst?
     size_t idxInOverlapInKeys = 0;
-
-    SSTablePtr currentOverlappingSST = numOfOverlap ? overlap[idxInOverlap] : nullptr;
-
+    // the sst in overlap that is currently being merged
+    SSTablePtr currentOverlappingSST = overlap[0];
+    // how many keys are there in the upper level
     const size_t numOfSSTKey = sst->numOfKeys;
     // where am I in key of sst?
     size_t idxInSST = 0;
-
     // lambda function to tell if there's any sst to merge
     auto shouldContinueMerge = [&]() { return idxInOverlap < numOfOverlap || idxInSST < numOfSSTKey; };
 
@@ -735,13 +732,14 @@ vector<SSTablePtr> KVStore::startMerge(const size_t level,
                 }
             };
             // which key should I choose?
-            if (idxInOverlap >= numOfOverlap) {
+            if (idxInSST >= numOfSSTKey) {
                 // data remaining in sst
+                key = currentOverlappingSST->keys[idxInOverlapInKeys];
+
+            } else if (idxInOverlap >= numOfOverlap) {
+                // data remaining in overlapping ssts
                 key = sst->keys[idxInSST];
                 chooseSST = true;
-            } else if (idxInSST >= numOfSSTKey) {
-                // data remaining in overlapping ssts
-                key = currentOverlappingSST->keys[idxInOverlapInKeys];
             } else {
                 Key key1 = sst->keys[idxInSST];
                 Key key2 = currentOverlappingSST->keys[idxInOverlapInKeys];
@@ -778,8 +776,8 @@ vector<SSTablePtr> KVStore::startMerge(const size_t level,
                 save(newSSTPtr, fileSize, numOfKeys, minKey, maxKey, values);
                 ret.emplace_back(newSSTPtr);
 #ifdef DEBUG
-//                cout << "========== One SST ==========" << endl;
-//                cout << *newSSTPtr << endl;
+                //                cout << "========== One SST ==========" << endl;
+                //                cout << *newSSTPtr << endl;
 #endif
                 break;
             }
@@ -788,8 +786,8 @@ vector<SSTablePtr> KVStore::startMerge(const size_t level,
             newSSTPtr->keys.emplace_back(key);
             newSSTPtr->bloomFilter.put(key);
             ++numOfKeys;
+            maxKey = key;
             minKey = key < minKey ? key : minKey;
-            maxKey = key > maxKey ? key : maxKey;
             values.emplace_back(value);
             fileSize = newFileSize;
             incrementIdx(chooseSST);
@@ -799,8 +797,8 @@ vector<SSTablePtr> KVStore::startMerge(const size_t level,
         if (!shouldContinueMerge() && !values.empty()) {
             save(newSSTPtr, fileSize, numOfKeys, minKey, maxKey, values);
 #ifdef DEBUG
-//            cout << "========== One SST ==========" << endl;
-//            cout << *newSSTPtr << endl;
+            //            cout << "========== One SST ==========" << endl;
+            //            cout << *newSSTPtr << endl;
 #endif
             ret.emplace_back(newSSTPtr);
         }
@@ -808,18 +806,18 @@ vector<SSTablePtr> KVStore::startMerge(const size_t level,
 
     // after merging, delete all files
     utils::rmfile(sst->fullPath.c_str());
-    for (const SSTablePtr& sstPtr: overlap) {
+    for (const SSTablePtr &sstPtr: overlap) {
         utils::rmfile(sstPtr->fullPath.c_str());
     }
     return ret;
 }
 
-    /**
-     * @Despcription: Get the max timestamp given the SSTs about to undergo compaciton
-     * @Param curLevelDiscard: The SSTs to discard at the upper level
-     * @Param nextLevelDiscard: The SSTs overlapping at the lower level
-     * @Return: The maximum timestamp
-     */
+/**
+ * @Despcription: Get the max timestamp given the SSTs about to undergo compaciton
+ * @Param curLevelDiscard: The SSTs to discard at the upper level
+ * @Param nextLevelDiscard: The SSTs overlapping at the lower level
+ * @Return: The maximum timestamp
+ */
 TimeStamp KVStore::getMaxTimeStamp(const shared_ptr<set<SSTablePtr>> &curLevelDiscard,
                                    const set<SSTablePtr> &nextLevelDiscard) {
     TimeStamp ret = 0;
@@ -829,31 +827,11 @@ TimeStamp KVStore::getMaxTimeStamp(const shared_ptr<set<SSTablePtr>> &curLevelDi
         curTimeStamp = (*sstIt)->timeStamp;
         ret = curTimeStamp > ret ? curTimeStamp : ret;
     }
-    for (const auto& sstPtr: nextLevelDiscard) {
+    for (const auto &sstPtr: nextLevelDiscard) {
         curTimeStamp = sstPtr->timeStamp;
         ret = curTimeStamp > ret ? curTimeStamp : ret;
     }
     return ret;
-}
-
-/*
- * @Description: Find idx of the largest sst whose minKey is lesser than or equal to target
- * @Return: The found idx
- */
-long KVStore::upperBound(const LevelPtr &levelPtr, Key target) {
-    long left = 0;
-    long right = levelPtr->size();
-
-    while (left < right) {
-        long mid = (left + right) >> 1;
-        if (levelPtr->at(mid)->minKey <= target) {
-            right = mid;
-        } else {
-            left = mid + 1;
-        }
-    }
-
-    return right == levelPtr->size() ? -1 : right;
 }
 
 /*

@@ -24,18 +24,16 @@ private:
 		phase();
 
 		// Test multiple key-value pairs
-        for (i = 0; i < max; i += 3) {
-            store.put(i, std::string(i+1, 's'));
-            EXPECT(std::string(i+1, 's'), store.get(i));
-        }
-        for (i = 1; i < max; i += 3) {
-            store.put(i, std::string(i+1, 's'));
-            EXPECT(std::string(i+1, 's'), store.get(i));
-        }
-        for (i = 2; i < max; i += 3) {
-            store.put(i, std::string(i+1, 's'));
-            EXPECT(std::string(i+1, 's'), store.get(i));
-        }
+		vector<int> keys(max);
+		for (i = 0; i < max; ++i) {
+		    keys[i] = i;
+		}
+        std::random_shuffle(keys.begin(), keys.end());
+
+		for (i = 0; i < max; ++i) {
+		    store.put(keys[i], std::string(keys[i] + 1, 's'));
+		}
+
 		phase();
 
 		// Test after all insertions
@@ -92,7 +90,6 @@ int main(int argc, char *argv[])
 	CorrectnessTest test("./data", verbose);
 
 	test.start_test();
-
     // debug
 	endTime = clock();
 	cout << "Total Time : " <<(double)(endTime - startTime) / CLOCKS_PER_SEC << "s" << endl;

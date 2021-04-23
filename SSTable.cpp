@@ -103,7 +103,7 @@ size_t SSTable::binarySearch(const Key& key) const {
     long left = 0;
     long right = keys.size() - 1;
     while (left <= right) {
-        long mid = (left + right) >> 1;
+        long mid = left + ((right - left) >> 1);
         Key k = keys[mid];
         if (k == key) {
             return mid;
