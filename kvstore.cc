@@ -705,9 +705,8 @@ vector<SSTablePtr> KVStore::startMerge(const size_t level,
     // lambda function to tell if there's any sst to merge
     auto shouldContinueMerge = [&]() { return idxInOverlap < numOfOverlap || idxInSST < numOfSSTKey; };
 
-    // merge a new SST
+    // check if there can still be an SST to merge
     while (shouldContinueMerge()) {
-        // mergeOneSST(level, maxTimeStamp, shouldContinueMerge, incrementIdx)
         SSTablePtr newSSTPtr = make_shared<SSTable>();
         newSSTPtr->fullPath = dir + "/level-" + to_string(level) + "/" + to_string(sstNo++) + ".sst";
         newSSTPtr->timeStamp = maxTimeStamp;
@@ -718,33 +717,27 @@ vector<SSTablePtr> KVStore::startMerge(const size_t level,
         Key maxKey = std::numeric_limits<Key>::min();
 
         vector<StringPtr> values;
+
+        auto incrementIdx = [&](bool chooseSST) {
+            if (!chooseSST) {
+                ++idxInOverlapInKeys;
+                // switch to the next overlapping sst
+                if (idxInOverlapInKeys >= currentOverlappingSST->numOfKeys) {
+                    idxInOverlapInKeys = 0;
+                    currentOverlappingSST = ++idxInOverlap < numOfOverlap ? overlap[idxInOverlap] : nullptr;
+                }
+            } else {
+                ++idxInSST;
+            }
+        };
+
         // in each loop, put one key into sst
         while (shouldContinueMerge()) {
             Key key;
             bool chooseSST = false;
 
-            auto incrementIdx = [&](bool chooseSST) {
-                if (!chooseSST) {
-                    ++idxInOverlapInKeys;
-                    // switch to the next overlapping sst
-                    if (idxInOverlapInKeys >= currentOverlappingSST->numOfKeys) {
-                        idxInOverlapInKeys = 0;
-                        currentOverlappingSST = ++idxInOverlap < numOfOverlap ? overlap[idxInOverlap] : nullptr;
-                    }
-                } else {
-                    ++idxInSST;
-                }
-            };
             // which key should I choose?
-            if (idxInSST >= numOfSSTKey) {
-                // data remaining in sst
-                key = currentOverlappingSST->keys[idxInOverlapInKeys];
-
-            } else if (idxInOverlap >= numOfOverlap) {
-                // data remaining in overlapping ssts
-                key = sst->keys[idxInSST];
-                chooseSST = true;
-            } else {
+            if (idxInSST < numOfSSTKey && idxInOverlap < numOfOverlap) {
                 Key key1 = sst->keys[idxInSST];
                 Key key2 = currentOverlappingSST->keys[idxInOverlapInKeys];
                 if (key1 <= key2) {
@@ -753,11 +746,17 @@ vector<SSTablePtr> KVStore::startMerge(const size_t level,
                 } else {
                     key = key2;
                 }
+            } else if (idxInSST >= numOfSSTKey) {
+                // data remaining in sst
+                key = currentOverlappingSST->keys[idxInOverlapInKeys];
+            } else {
+                // data remaining in overlapping ssts
+                key = sst->keys[idxInSST];
+                chooseSST = true;
             }
 
             // check for duplicate key, only handle error case
             if (duplicateChecker.count(key)) {
-                // increment index
                 incrementIdx(chooseSST);
                 continue;
             }
@@ -774,15 +773,10 @@ vector<SSTablePtr> KVStore::startMerge(const size_t level,
             }
 
             // check file size
-            // in the case of overwrite, the value being overwritten must be at the end, as is the key
             size_t newFileSize = fileSize + INDEX_SIZE_PER_VALUE + value->size();
             if (newFileSize > MAX_SSTABLE_SIZE) {
                 save(newSSTPtr, fileSize, numOfKeys, minKey, maxKey, values);
                 ret.emplace_back(newSSTPtr);
-#ifdef DEBUG
-                //                cout << "========== One SST ==========" << endl;
-                //                cout << *newSSTPtr << endl;
-#endif
                 break;
             }
 
@@ -800,10 +794,6 @@ vector<SSTablePtr> KVStore::startMerge(const size_t level,
 
         if (!shouldContinueMerge() && !values.empty()) {
             save(newSSTPtr, fileSize, numOfKeys, minKey, maxKey, values);
-#ifdef DEBUG
-            //            cout << "========== One SST ==========" << endl;
-            //            cout << *newSSTPtr << endl;
-#endif
             ret.emplace_back(newSSTPtr);
         }
     }
