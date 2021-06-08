@@ -243,7 +243,6 @@ __unused void KVStore::printSSTables() {
  * @Description: Handle compaction for all levels, level-0 and other levels are handled separately
  */
 void KVStore::compaction() {
-    cout << " compact! ";
     // handle level0 special case
     if (ssTables[0]->size() > 2) {
         compactionLevel0();
