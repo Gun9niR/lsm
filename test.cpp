@@ -1,8 +1,11 @@
 #include "kvstore.h"
 #include <random>
+#include <thread>
+#include <ctime>
 
 const int keyNum = 10000;
 const int rounds = 4;
+std::default_random_engine r(time(nullptr));
 
 void test_p_g_d(KVStore &kv, int valSize) {
     size_t putTotal = 0;
@@ -106,18 +109,40 @@ void test_p_g(KVStore &kv, int valSize) {
     cout << "<GET> Average delay: " << (double) getTotal / keyNum / CLOCKS_PER_SEC / rounds <<"s\t" << endl;
 }
 
+void testCompaction(KVStore &kv, int valSize, int sec) {
+    Key numOfPuts = 0;
+    String val = String(valSize, 's');
+
+    auto counter = [&]() {
+        cout << "thread begin" << endl;
+        int lastSec = 0;
+        int currentSec = 0;
+        int lastOps = 0;
+
+        while (currentSec < sec) {
+            currentSec = clock() / CLOCKS_PER_SEC;
+            if (currentSec > lastSec) {
+                lastSec = currentSec;
+                int currentPuts = numOfPuts;
+                int opsThisSec = currentPuts - lastOps;
+                lastOps = currentPuts;
+                cout << opsThisSec << ", " << std::flush;
+            }
+        }
+    };
+
+    std::thread t(counter);
+
+    while (1) {
+        kv.put(r(), val);
+        ++numOfPuts;
+    }
+
+    t.join();
+}
+
 int main() {
     KVStore kv("./data");
 
-//    // 值大小为50
-//    test_p_g_d(kv, 50);
-//    // 值大小为500
-//    test_p_g_d(kv, 500);
-//    // 值大小为5000
-//    test_p_g_d(kv ,5000);
-//    // 值大小为50000
-//    test_p_g_d(kv, 50000);
-//    // 值大小为500000
-//    test_p_g_d(kv, 500000);
-    test_p_g(kv, 5000);
+    testCompaction(kv, 128, 60);
 }
