@@ -9,6 +9,11 @@
  * @param dir: base directory, where all SSTs are stored
  */
 KVStore::KVStore(const String &dir) : KVStoreAPI(dir), dir(dir), timeStamp(1), sstNo(1) {
+    // 先创建文件夹
+    if (!utils::dirExists(dir)) {
+        utils::mkdir(dir.c_str());
+    }
+
     vector<String> levelList;
     int levelNum = utils::scanDir(dir, levelList);
 
