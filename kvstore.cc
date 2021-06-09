@@ -228,7 +228,7 @@ SSTablePtr KVStore::binarySearch(const LevelPtr &levelPtr, const Key &key) {
 /*
  * @Description: Debug utility function, print all ssTables cached in memory.
  */
-__unused void KVStore::printSSTables() {
+void KVStore::printSSTables() {
     int numOfLevels = ssTables.size();
     for (int i = 0; i < numOfLevels; ++i) {
         cout << "Level " << i << endl;
@@ -251,6 +251,7 @@ void KVStore::compaction() {
     size_t numOfLevels = ssTables.size();
     size_t numOfLevelsToIterate = numOfLevels - 1;
     for (size_t i = 1; i < numOfLevelsToIterate; ++i) {
+        // cout << "========== level " << i << " size: " << ssTables[i]->size() << endl;
         if (ssTables[i]->size() > (2 << i)) {
             compaction(i, i == numOfLevelsToIterate - 1);
         }
@@ -277,6 +278,8 @@ void KVStore::compaction() {
             ifstream src(oldPath, ios::binary);
             ofstream dst(sst->fullPath, ios::binary);
             dst << src.rdbuf();
+            src.close();
+            dst.close();
             utils::rmfile(oldPath.c_str());
             newLevel->emplace_back(sst);
         }
@@ -338,6 +341,8 @@ void KVStore::compaction(size_t level, bool shouldRemoveDeletionMark) {
             ifstream src(oldPath, ios::binary);
             ofstream dst(ssTablePtr->fullPath, ios::binary);
             dst << src.rdbuf();
+            src.close();
+            dst.close();
             utils::rmfile(oldPath.c_str());
             mergeResult.emplace_back(ssTablePtr);
         } else {

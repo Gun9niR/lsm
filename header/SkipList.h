@@ -60,6 +60,8 @@ private:
 public:
     SkipList();
 
+    ~SkipList();
+
     Size size() const ;
 
     Size fileSize() const;
@@ -82,6 +84,11 @@ SkipList<Key, Value>::SkipList() {
     _size = 0;
     _fileSize = HEADER_SIZE + BLOOM_FILTER_SIZE; // header and bloom filter
     head = make_shared<Node>();
+}
+
+template<typename Key, typename Value>
+SkipList<Key, Value>::~SkipList() {
+    head.reset();
 }
 
 template<typename Key, typename Value>

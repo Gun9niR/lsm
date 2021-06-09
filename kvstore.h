@@ -1,5 +1,3 @@
-#include <__bit_reference>
-
 #pragma once
 
 #include "header/SSTable.h"
@@ -55,5 +53,5 @@ public:
 
 	void reset() override;
 
-    __unused    void printSSTables();
+    void printSSTables();
 };

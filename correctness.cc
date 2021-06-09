@@ -7,7 +7,7 @@
 class CorrectnessTest : public Test {
 private:
 	const uint64_t SIMPLE_TEST_MAX = 512;
-	const uint64_t LARGE_TEST_MAX = 1024 * 64;
+	const uint64_t LARGE_TEST_MAX = 1024 * 16;
 
 	void regular_test(uint64_t max)
 	{
@@ -82,9 +82,6 @@ public:
 
 int main(int argc, char *argv[])
 {
-	clock_t startTime,endTime;
-	startTime = clock();
-
 	bool verbose = (argc == 2 && std::string(argv[1]) == "-v");
 
 	std::cout << "Usage: " << argv[0] << " [-v]" << std::endl;
@@ -96,8 +93,5 @@ int main(int argc, char *argv[])
 	CorrectnessTest test("./data", verbose);
 
 	test.start_test();
-    // debug
-	endTime = clock();
-	cout << "Total Time : " <<(double)(endTime - startTime) / CLOCKS_PER_SEC << "s" << endl;
 	return 0;
 }

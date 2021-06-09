@@ -52,7 +52,7 @@ public:
 
     shared_ptr<String> get(const Key &) const;
 
-    shared_ptr<String> get(size_t idx) const;
+    shared_ptr<String> getByIdx(size_t idx) const;
 
     bool contains(const Key&) const;
 

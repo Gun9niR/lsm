@@ -67,7 +67,7 @@ shared_ptr<String> SSTable::get(const Key& key) const {
         // 二分查找，找到了不管是不是删除标记都返回指针
         size_t idx = binarySearch(key);
         if (idx != std::numeric_limits<size_t>::max()) {
-            return get(idx);
+            return getByIdx(idx);
         }
     }
     return nullptr;
@@ -78,7 +78,7 @@ shared_ptr<String> SSTable::get(const Key& key) const {
  * @Param idx: The index in values
  * @Return: Pointer to the value
  */
-shared_ptr<String> SSTable::get(size_t idx) const {
+shared_ptr<String> SSTable::getByIdx(size_t idx) const {
     size_t length = (idx != numOfKeys - 1) ?
                     offset[idx + 1] - offset[idx] :
                     fileSize - offset[idx];

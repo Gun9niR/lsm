@@ -11,6 +11,8 @@
 #include <unordered_set>
 #include <unordered_map>
 #include <set>
+#include <limits>
+#include <algorithm>
 #include "../kvstore_api.h"
 
 using std::shared_ptr;
