@@ -16,6 +16,7 @@
 #include "../kvstore_api.h"
 
 using std::shared_ptr;
+using std::weak_ptr;
 using std::make_shared;
 using std::vector;
 using std::priority_queue;

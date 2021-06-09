@@ -88,7 +88,19 @@ SkipList<Key, Value>::SkipList() {
 
 template<typename Key, typename Value>
 SkipList<Key, Value>::~SkipList() {
-    head.reset();
+    // p points to the start of the level
+    NodePtr p = head;
+    while (p) {
+        // q points to current level
+        NodePtr q = p;
+        p = p->down;
+        while (q) {
+            if (q->left) {
+                q->left.reset();
+            }
+            q = q->right;
+        }
+    }
 }
 
 template<typename Key, typename Value>
@@ -234,11 +246,11 @@ void SkipList<Key, Value>::reset() {
         NodePtr q = p;
         p = p->down;
         while (q) {
-            NodePtr oldQ = q;
+            if (q->left) {
+                q->left.reset();
+            }
             q = q->right;
-            oldQ.reset();
         }
-
     }
 
     head = make_shared<Node>();
