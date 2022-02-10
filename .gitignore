@@ -2,7 +2,10 @@
 !*.*
 !*/
 
-data
-.DS_Store
+# CLion
 .idea
-*.o
+cmake-build-debug
+
+# macOS
+.DS_Store
+
